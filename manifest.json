@@ -5,7 +5,8 @@
     "description": "Manage your tabs efficiently.",
     "permissions": [
       "tabs",
-      "storage"
+      "storage",
+      "activeTab"
     ],
     "background": {
       "service_worker": "background/background.js"
