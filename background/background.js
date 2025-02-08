@@ -13,12 +13,17 @@
 // Data structure to store tab relationships (parent-child)
 let tabRelationships = {};
 
+// Define a structure to hold all tabs
+let tabTree = {
+    allTabs: []
+};
+
 // Listen for tab updates
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     console.log("Tab updated event fired for tab:", tabId);
     if (changeInfo.status === 'complete') {
-        // Capture detailed information about the tab update
         const tabData = {
+            id: tabId,
             url: tab.url,
             title: tab.title,
             status: changeInfo.status,
@@ -32,20 +37,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             openerTabId: tab.openerTabId,
         };
 
-        // Store the tab data in local storage
-        chrome.storage.local.set({ [tabId]: tabData }, () => {
-            if (chrome.runtime.lastError) {
-                console.error("Error saving updated tab data:", chrome.runtime.lastError);
-            } else {
-                console.log("Tab data saved:", tabData);
-            }
-        });
-        chrome.storage.local.set({ onUpdated: "testValue1" });
-
-        // Check for tab repositioning (if needed)
-        if (changeInfo.pinned !== undefined) {
-            tabData.pinned = changeInfo.pinned;
-            chrome.storage.local.set({ [tabId]: tabData });
+        // Update the tab data in the allTabs array
+        const index = tabTree.allTabs.findIndex(t => t.id === tabId);
+        if (index !== -1) {
+            tabTree.allTabs[index] = tabData;
+            storeTabTree();
         }
     }
 });
@@ -54,6 +50,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.tabs.onCreated.addListener((tab) => {
     console.log("New tab created with id:", tab.id);
     const tabData = {
+        id: tab.id,
         url: tab.url,
         title: tab.title,
         created: new Date().toISOString(),
@@ -66,15 +63,8 @@ chrome.tabs.onCreated.addListener((tab) => {
         openerTabId: tab.openerTabId,
     };
 
-    // Store the new tab data
-    chrome.storage.local.set({ [tab.id]: tabData }, () => {
-        if (chrome.runtime.lastError) {
-            console.error("Error saving new tab data:", chrome.runtime.lastError);
-        } else {
-            console.log("New tab data saved:", tabData);
-        }
-    });
-    chrome.storage.local.set({ onCreated: "testValue2" });
+    // Add the new tab data to the allTabs array
+    addTab(tabData);
 
     // Initialize tab relationships if needed (e.g., new tab may have a parent)
     // (Here, assuming a parent-child relation can be derived from the tab's openerTabId)
@@ -88,14 +78,9 @@ chrome.tabs.onCreated.addListener((tab) => {
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
     console.log("Tab removed with id:", tabId);
 
-    // Remove the tab data from local storage
-    chrome.storage.local.remove(tabId.toString(), () => {
-        if (chrome.runtime.lastError) {
-            console.error("Error removing tab data:", chrome.runtime.lastError);
-        } else {
-            console.log("Tab data removed for tab id:", tabId);
-        }
-    });
+    // Remove the tab data from the allTabs array
+    tabTree.allTabs = tabTree.allTabs.filter(tab => tab.id !== tabId);
+    storeTabTree();
 
     // Clean up the parent-child relationship data
     for (let parentTabId in tabRelationships) {
@@ -110,6 +95,34 @@ function getTabRelationships() {
 
 // Optionally, save the tab relationships to storage (if needed)
 chrome.storage.local.set({ tabRelationships: tabRelationships });
+
+// Function to add a tab to the allTabs array
+function addTab(tab) {
+    tabTree.allTabs.push(tab);
+    storeTabTree();
+}
+
+// Function to store the tab tree structure
+function storeTabTree() {
+    chrome.storage.local.set({ tabTree: tabTree }, () => {
+        if (chrome.runtime.lastError) {
+            console.error("Error saving tab tree:", chrome.runtime.lastError);
+        } else {
+            console.log("Tab tree saved:", tabTree);
+        }
+    });
+}
+
+// Function to retrieve the tab tree structure
+function retrieveTabTree(callback) {
+    chrome.storage.local.get("tabTree", (result) => {
+        if (result.tabTree) {
+            tabTree = result.tabTree;
+            console.log("Tab tree loaded:", tabTree);
+            if (callback) callback(tabTree);
+        }
+    });
+}
 
 // Testing and debugging steps (suggested approach for tests)
 // Test data storage on tab update
